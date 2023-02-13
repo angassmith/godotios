@@ -408,6 +408,13 @@ static NSMutableArray<ApplicationDelegateService *> *services = nil;
 	return NO;
 }
 
+- (BOOL)application:(UIApplication *)application handleOpenURL:(NSURL *)url {
+  if (!url) { 
+    return NO; 
+  } 
+  NSString *URLString = [url absoluteString];
+}
+
 // MARK: Disallowing Specified App Extension Types
 
 - (BOOL)application:(UIApplication *)application shouldAllowExtensionPointIdentifier:(UIApplicationExtensionPointIdentifier)extensionPointIdentifier {
