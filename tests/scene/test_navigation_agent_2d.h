@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  thorvg_svg_in_ot.h                                                    */
+/*  test_navigation_agent_2d.h                                            */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,61 +28,45 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef THORVG_SVG_IN_OT_H
-#define THORVG_SVG_IN_OT_H
+#ifndef TEST_NAVIGATION_AGENT_2D_H
+#define TEST_NAVIGATION_AGENT_2D_H
 
-#ifdef GDEXTENSION
-// Headers for building as GDExtension plug-in.
+#include "scene/2d/navigation_agent_2d.h"
+#include "scene/2d/node_2d.h"
+#include "scene/main/window.h"
+#include "scene/resources/world_2d.h"
 
-#include <godot_cpp/core/mutex_lock.hpp>
-#include <godot_cpp/godot.hpp>
-#include <godot_cpp/templates/hash_map.hpp>
+#include "tests/test_macros.h"
 
-using namespace godot;
+namespace TestNavigationAgent2D {
 
-#else
-// Headers for building as built-in module.
+TEST_SUITE("[Navigation]") {
+	TEST_CASE("[SceneTree][NavigationAgent2D] New agent should have valid RID") {
+		NavigationAgent2D *agent_node = memnew(NavigationAgent2D);
+		CHECK(agent_node->get_rid().is_valid());
+		memdelete(agent_node);
+	}
 
-#include "core/os/mutex.h"
-#include "core/templates/hash_map.h"
-#include "core/typedefs.h"
+	TEST_CASE("[SceneTree][NavigationAgent2D] New agent should attach to default map") {
+		Node2D *node_2d = memnew(Node2D);
+		SceneTree::get_singleton()->get_root()->add_child(node_2d);
 
-#include "modules/modules_enabled.gen.h" // For svg, freetype.
-#endif
+		NavigationAgent2D *agent_node = memnew(NavigationAgent2D);
 
-#ifdef MODULE_SVG_ENABLED
-#ifdef MODULE_FREETYPE_ENABLED
+		// agent should not be attached to any map when outside of tree
+		CHECK_FALSE(agent_node->get_navigation_map().is_valid());
 
-#include <freetype/freetype.h>
-#include <freetype/otsvg.h>
-#include <ft2build.h>
-#include <thorvg.h>
+		SUBCASE("Agent should attach to default map when it enters the tree") {
+			node_2d->add_child(agent_node);
+			CHECK(agent_node->get_navigation_map().is_valid());
+			CHECK(agent_node->get_navigation_map() == node_2d->get_world_2d()->get_navigation_map());
+		}
 
-struct GL_State {
-	bool ready = false;
-	float bmp_x = 0;
-	float bmp_y = 0;
-	float x = 0;
-	float y = 0;
-	float w = 0;
-	float h = 0;
-	String xml_code;
-	tvg::Matrix m;
-};
+		memdelete(agent_node);
+		memdelete(node_2d);
+	}
+}
 
-struct TVG_State {
-	Mutex mutex;
-	HashMap<uint32_t, GL_State> glyph_map;
-};
+} //namespace TestNavigationAgent2D
 
-FT_Error tvg_svg_in_ot_init(FT_Pointer *p_state);
-void tvg_svg_in_ot_free(FT_Pointer *p_state);
-FT_Error tvg_svg_in_ot_preset_slot(FT_GlyphSlot p_slot, FT_Bool p_cache, FT_Pointer *p_state);
-FT_Error tvg_svg_in_ot_render(FT_GlyphSlot p_slot, FT_Pointer *p_state);
-
-SVG_RendererHooks *get_tvg_svg_in_ot_hooks();
-
-#endif // MODULE_FREETYPE_ENABLED
-#endif // MODULE_SVG_ENABLED
-
-#endif // THORVG_SVG_IN_OT_H
+#endif // TEST_NAVIGATION_AGENT_2D_H

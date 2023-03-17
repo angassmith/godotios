@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  thorvg_svg_in_ot.h                                                    */
+/*  test_navigation_server_2d.h                                           */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,61 +28,20 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef THORVG_SVG_IN_OT_H
-#define THORVG_SVG_IN_OT_H
+#ifndef TEST_NAVIGATION_SERVER_2D_H
+#define TEST_NAVIGATION_SERVER_2D_H
 
-#ifdef GDEXTENSION
-// Headers for building as GDExtension plug-in.
+#include "servers/navigation_server_2d.h"
 
-#include <godot_cpp/core/mutex_lock.hpp>
-#include <godot_cpp/godot.hpp>
-#include <godot_cpp/templates/hash_map.hpp>
+#include "tests/test_macros.h"
 
-using namespace godot;
+namespace TestNavigationServer2D {
+TEST_SUITE("[Navigation]") {
+	TEST_CASE("[NavigationServer2D] Server should be empty when initialized") {
+		NavigationServer2D *navigation_server = NavigationServer2D::get_singleton();
+		CHECK_EQ(navigation_server->get_maps().size(), 0);
+	}
+}
+} //namespace TestNavigationServer2D
 
-#else
-// Headers for building as built-in module.
-
-#include "core/os/mutex.h"
-#include "core/templates/hash_map.h"
-#include "core/typedefs.h"
-
-#include "modules/modules_enabled.gen.h" // For svg, freetype.
-#endif
-
-#ifdef MODULE_SVG_ENABLED
-#ifdef MODULE_FREETYPE_ENABLED
-
-#include <freetype/freetype.h>
-#include <freetype/otsvg.h>
-#include <ft2build.h>
-#include <thorvg.h>
-
-struct GL_State {
-	bool ready = false;
-	float bmp_x = 0;
-	float bmp_y = 0;
-	float x = 0;
-	float y = 0;
-	float w = 0;
-	float h = 0;
-	String xml_code;
-	tvg::Matrix m;
-};
-
-struct TVG_State {
-	Mutex mutex;
-	HashMap<uint32_t, GL_State> glyph_map;
-};
-
-FT_Error tvg_svg_in_ot_init(FT_Pointer *p_state);
-void tvg_svg_in_ot_free(FT_Pointer *p_state);
-FT_Error tvg_svg_in_ot_preset_slot(FT_GlyphSlot p_slot, FT_Bool p_cache, FT_Pointer *p_state);
-FT_Error tvg_svg_in_ot_render(FT_GlyphSlot p_slot, FT_Pointer *p_state);
-
-SVG_RendererHooks *get_tvg_svg_in_ot_hooks();
-
-#endif // MODULE_FREETYPE_ENABLED
-#endif // MODULE_SVG_ENABLED
-
-#endif // THORVG_SVG_IN_OT_H
+#endif // TEST_NAVIGATION_SERVER_2D_H
