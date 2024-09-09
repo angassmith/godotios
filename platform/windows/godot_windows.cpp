@@ -28,14 +28,15 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#include "main/main.h"
 #include "os_windows.h"
+
+#include "main/main.h"
 
 #include <locale.h>
 #include <stdio.h>
 
 // For export templates, add a section; the exporter will patch it to enclose
-// the data appended to the executable (bundled PCK)
+// the data appended to the executable (bundled PCK).
 #ifndef TOOLS_ENABLED
 #if defined _MSC_VER
 #pragma section("pck", read)
@@ -44,7 +45,7 @@ __declspec(allocate("pck")) static char dummy[8] = { 0 };
 // Dummy function to prevent LTO from discarding "pck" section.
 extern "C" char *__cdecl pck_section_dummy_call() {
 	return &dummy[0];
-};
+}
 #if defined _AMD64_
 #pragma comment(linker, "/include:pck_section_dummy_call")
 #elif defined _X86_
@@ -170,13 +171,15 @@ int widechar_main(int argc, wchar_t **argv) {
 		delete[] argv_utf8;
 
 		if (err == ERR_HELP) { // Returned by --help and --version, so success.
-			return 0;
+			return EXIT_SUCCESS;
 		}
-		return 255;
+		return EXIT_FAILURE;
 	}
 
-	if (Main::start()) {
+	if (Main::start() == EXIT_SUCCESS) {
 		os.run();
+	} else {
+		os.set_exit_code(EXIT_FAILURE);
 	}
 	Main::cleanup();
 
@@ -212,7 +215,7 @@ int main(int argc, char **argv) {
 
 	// _argc and _argv are ignored
 	// we are going to use the WideChar version of them instead
-#ifdef CRASH_HANDLER_EXCEPTION
+#if defined(CRASH_HANDLER_EXCEPTION) && defined(_MSC_VER)
 	__try {
 		return _main();
 	} __except (CrashHandlerException(GetExceptionInformation())) {

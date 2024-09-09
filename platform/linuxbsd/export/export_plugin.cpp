@@ -30,12 +30,15 @@
 
 #include "export_plugin.h"
 
+#include "logo_svg.gen.h"
+#include "run_icon_svg.gen.h"
+
 #include "core/config/project_settings.h"
 #include "editor/editor_node.h"
 #include "editor/editor_paths.h"
-#include "editor/editor_scale.h"
-#include "platform/linuxbsd/logo_svg.gen.h"
-#include "platform/linuxbsd/run_icon_svg.gen.h"
+#include "editor/editor_string_names.h"
+#include "editor/export/editor_export.h"
+#include "editor/themes/editor_scale.h"
 
 #include "modules/modules_enabled.gen.h" // For svg.
 #ifdef MODULE_SVG_ENABLED
@@ -76,6 +79,7 @@ Error EditorExportPlatformLinuxBSD::export_project(const Ref<EditorExportPreset>
 	Ref<DirAccess> tmp_app_dir = DirAccess::create_for_path(tmp_dir_path);
 	if (export_as_zip) {
 		if (tmp_app_dir.is_null()) {
+			add_message(EXPORT_MESSAGE_ERROR, TTR("Prepare Templates"), vformat(TTR("Could not create and open the directory: \"%s\""), tmp_dir_path));
 			return ERR_CANT_CREATE;
 		}
 		if (DirAccess::exists(tmp_dir_path)) {
@@ -90,19 +94,18 @@ Error EditorExportPlatformLinuxBSD::export_project(const Ref<EditorExportPreset>
 	// Export project.
 	Error err = EditorExportPlatformPC::export_project(p_preset, p_debug, path, p_flags);
 	if (err != OK) {
+		// Message is supplied by the subroutine method.
 		return err;
 	}
 
-	// Save console script.
-	if (err == OK) {
-		int con_scr = p_preset->get("debug/export_console_script");
-		if ((con_scr == 1 && p_debug) || (con_scr == 2)) {
-			String scr_path = path.get_basename() + ".sh";
-			err = _export_debug_script(p_preset, pkg_name, path.get_file(), scr_path);
-			FileAccess::set_unix_permissions(scr_path, 0755);
-			if (err != OK) {
-				add_message(EXPORT_MESSAGE_ERROR, TTR("Debug Script Export"), TTR("Could not create console script."));
-			}
+	// Save console wrapper.
+	int con_scr = p_preset->get("debug/export_console_wrapper");
+	if ((con_scr == 1 && p_debug) || (con_scr == 2)) {
+		String scr_path = path.get_basename() + ".sh";
+		err = _export_debug_script(p_preset, pkg_name, path.get_file(), scr_path);
+		FileAccess::set_unix_permissions(scr_path, 0755);
+		if (err != OK) {
+			add_message(EXPORT_MESSAGE_ERROR, TTR("Debug Console Export"), TTR("Could not create console wrapper."));
 		}
 	}
 
@@ -142,7 +145,25 @@ List<String> EditorExportPlatformLinuxBSD::get_binary_extensions(const Ref<Edito
 	return list;
 }
 
-void EditorExportPlatformLinuxBSD::get_export_options(List<ExportOption> *r_options) {
+bool EditorExportPlatformLinuxBSD::get_export_option_visibility(const EditorExportPreset *p_preset, const String &p_option) const {
+	if (p_preset == nullptr) {
+		return true;
+	}
+
+	bool advanced_options_enabled = p_preset->are_advanced_options_enabled();
+
+	// Hide SSH options.
+	bool ssh = p_preset->get("ssh_remote_deploy/enabled");
+	if (!ssh && p_option != "ssh_remote_deploy/enabled" && p_option.begins_with("ssh_remote_deploy/")) {
+		return false;
+	}
+	if (p_option == "dotnet/embed_build_outputs") {
+		return advanced_options_enabled;
+	}
+	return true;
+}
+
+void EditorExportPlatformLinuxBSD::get_export_options(List<ExportOption> *r_options) const {
 	EditorExportPlatformPC::get_export_options(r_options);
 
 	r_options->push_back(ExportOption(PropertyInfo(Variant::STRING, "binary_format/architecture", PROPERTY_HINT_ENUM, "x86_64,x86_32,arm64,arm32,rv64,ppc64,ppc32"), "x86_64"));
@@ -156,7 +177,7 @@ void EditorExportPlatformLinuxBSD::get_export_options(List<ExportOption> *r_opti
 							"kill $(pgrep -x -f \"{temp_dir}/{exe_name} {cmd_args}\")\n"
 							"rm -rf \"{temp_dir}\"";
 
-	r_options->push_back(ExportOption(PropertyInfo(Variant::BOOL, "ssh_remote_deploy/enabled"), false));
+	r_options->push_back(ExportOption(PropertyInfo(Variant::BOOL, "ssh_remote_deploy/enabled"), false, true));
 	r_options->push_back(ExportOption(PropertyInfo(Variant::STRING, "ssh_remote_deploy/host"), "user@host_ip"));
 	r_options->push_back(ExportOption(PropertyInfo(Variant::STRING, "ssh_remote_deploy/port"), "22"));
 
@@ -503,22 +524,23 @@ Error EditorExportPlatformLinuxBSD::run(const Ref<EditorExportPreset> &p_preset,
 }
 
 EditorExportPlatformLinuxBSD::EditorExportPlatformLinuxBSD() {
+	if (EditorNode::get_singleton()) {
 #ifdef MODULE_SVG_ENABLED
-	Ref<Image> img = memnew(Image);
-	const bool upsample = !Math::is_equal_approx(Math::round(EDSCALE), EDSCALE);
+		Ref<Image> img = memnew(Image);
+		const bool upsample = !Math::is_equal_approx(Math::round(EDSCALE), EDSCALE);
 
-	ImageLoaderSVG img_loader;
-	img_loader.create_image_from_string(img, _linuxbsd_logo_svg, EDSCALE, upsample, false);
-	set_logo(ImageTexture::create_from_image(img));
+		ImageLoaderSVG::create_image_from_string(img, _linuxbsd_logo_svg, EDSCALE, upsample, false);
+		set_logo(ImageTexture::create_from_image(img));
 
-	img_loader.create_image_from_string(img, _linuxbsd_run_icon_svg, EDSCALE, upsample, false);
-	run_icon = ImageTexture::create_from_image(img);
+		ImageLoaderSVG::create_image_from_string(img, _linuxbsd_run_icon_svg, EDSCALE, upsample, false);
+		run_icon = ImageTexture::create_from_image(img);
 #endif
 
-	Ref<Theme> theme = EditorNode::get_singleton()->get_editor_theme();
-	if (theme.is_valid()) {
-		stop_icon = theme->get_icon(SNAME("Stop"), SNAME("EditorIcons"));
-	} else {
-		stop_icon.instantiate();
+		Ref<Theme> theme = EditorNode::get_singleton()->get_editor_theme();
+		if (theme.is_valid()) {
+			stop_icon = theme->get_icon(SNAME("Stop"), EditorStringName(EditorIcons));
+		} else {
+			stop_icon.instantiate();
+		}
 	}
 }

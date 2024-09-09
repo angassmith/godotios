@@ -39,6 +39,9 @@
 class EditorQuickOpen : public ConfirmationDialog {
 	GDCLASS(EditorQuickOpen, ConfirmationDialog);
 
+	static Rect2i prev_rect;
+	static bool was_showed;
+
 	LineEdit *search_box = nullptr;
 	Tree *search_options = nullptr;
 	String base_type;
@@ -60,7 +63,7 @@ class EditorQuickOpen : public ConfirmationDialog {
 
 	void _update_search();
 	void _build_search_cache(EditorFileSystemDirectory *p_efsd);
-	float _score_path(const String &p_search, const String &p_path);
+	float _score_search_result(const PackedStringArray &p_search_tokens, const String &p_path);
 
 	void _confirmed();
 	virtual void cancel_pressed() override;
@@ -68,8 +71,6 @@ class EditorQuickOpen : public ConfirmationDialog {
 
 	void _sbox_input(const Ref<InputEvent> &p_ie);
 	void _text_changed(const String &p_newtext);
-
-	void _theme_changed();
 
 protected:
 	void _notification(int p_what);

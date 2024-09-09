@@ -67,20 +67,30 @@ void ImageLoaderSVG::_replace_color_property(const HashMap<Color, Color> &p_colo
 	}
 }
 
-Error ImageLoaderSVG::create_image_from_utf8_buffer(Ref<Image> p_image, const PackedByteArray &p_buffer, float p_scale, bool p_upsample) {
+Ref<Image> ImageLoaderSVG::load_mem_svg(const uint8_t *p_svg, int p_size, float p_scale) {
+	Ref<Image> img;
+	img.instantiate();
+
+	Error err = create_image_from_utf8_buffer(img, p_svg, p_size, p_scale, false);
+	ERR_FAIL_COND_V_MSG(err != OK, Ref<Image>(), vformat("ImageLoaderSVG: Failed to create SVG from buffer, error code %d.", err));
+
+	return img;
+}
+
+Error ImageLoaderSVG::create_image_from_utf8_buffer(Ref<Image> p_image, const uint8_t *p_buffer, int p_buffer_size, float p_scale, bool p_upsample) {
 	ERR_FAIL_COND_V_MSG(Math::is_zero_approx(p_scale), ERR_INVALID_PARAMETER, "ImageLoaderSVG: Can't load SVG with a scale of 0.");
 
 	std::unique_ptr<tvg::Picture> picture = tvg::Picture::gen();
 
-	tvg::Result result = picture->load((const char *)p_buffer.ptr(), p_buffer.size(), "svg", true);
+	tvg::Result result = picture->load((const char *)p_buffer, p_buffer_size, "svg", true);
 	if (result != tvg::Result::Success) {
 		return ERR_INVALID_DATA;
 	}
 	float fw, fh;
 	picture->size(&fw, &fh);
 
-	uint32_t width = round(fw * p_scale);
-	uint32_t height = round(fh * p_scale);
+	uint32_t width = MAX(1, round(fw * p_scale));
+	uint32_t height = MAX(1, round(fh * p_scale));
 
 	const uint32_t max_dimension = 16384;
 	if (width > max_dimension || height > max_dimension) {
@@ -97,7 +107,7 @@ Error ImageLoaderSVG::create_image_from_utf8_buffer(Ref<Image> p_image, const Pa
 	// Note: memalloc here, be sure to memfree before any return.
 	uint32_t *buffer = (uint32_t *)memalloc(sizeof(uint32_t) * width * height);
 
-	tvg::Result res = sw_canvas->target(buffer, width, width, height, tvg::SwCanvas::ARGB8888_STRAIGHT);
+	tvg::Result res = sw_canvas->target(buffer, width, width, height, tvg::SwCanvas::ARGB8888S);
 	if (res != tvg::Result::Success) {
 		memfree(buffer);
 		ERR_FAIL_V_MSG(FAILED, "ImageLoaderSVG: Couldn't set target on ThorVG canvas.");
@@ -142,6 +152,10 @@ Error ImageLoaderSVG::create_image_from_utf8_buffer(Ref<Image> p_image, const Pa
 	return OK;
 }
 
+Error ImageLoaderSVG::create_image_from_utf8_buffer(Ref<Image> p_image, const PackedByteArray &p_buffer, float p_scale, bool p_upsample) {
+	return create_image_from_utf8_buffer(p_image, p_buffer.ptr(), p_buffer.size(), p_scale, p_upsample);
+}
+
 Error ImageLoaderSVG::create_image_from_string(Ref<Image> p_image, String p_string, float p_scale, bool p_upsample, const HashMap<Color, Color> &p_color_map) {
 	if (p_color_map.size()) {
 		_replace_color_property(p_color_map, "stop-color=\"", p_string);
@@ -159,9 +173,17 @@ void ImageLoaderSVG::get_recognized_extensions(List<String> *p_extensions) const
 }
 
 Error ImageLoaderSVG::load_image(Ref<Image> p_image, Ref<FileAccess> p_fileaccess, BitField<ImageFormatLoader::LoaderFlags> p_flags, float p_scale) {
-	String svg = p_fileaccess->get_as_utf8_string();
+	const uint64_t len = p_fileaccess->get_length() - p_fileaccess->get_position();
+	Vector<uint8_t> buffer;
+	buffer.resize(len);
+	p_fileaccess->get_buffer(buffer.ptrw(), buffer.size());
 
-	Error err;
+	String svg;
+	Error err = svg.parse_utf8((const char *)buffer.ptr(), buffer.size());
+	if (err != OK) {
+		return err;
+	}
+
 	if (p_flags & FLAG_CONVERT_COLORS) {
 		err = create_image_from_string(p_image, svg, p_scale, false, forced_color_map);
 	} else {
@@ -178,4 +200,8 @@ Error ImageLoaderSVG::load_image(Ref<Image> p_image, Ref<FileAccess> p_fileacces
 		p_image->srgb_to_linear();
 	}
 	return OK;
+}
+
+ImageLoaderSVG::ImageLoaderSVG() {
+	Image::_svg_scalable_mem_loader_func = load_mem_svg;
 }

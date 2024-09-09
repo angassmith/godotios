@@ -45,6 +45,8 @@ class NavigationLink3D : public Node3D {
 	real_t enter_cost = 0.0;
 	real_t travel_cost = 1.0;
 
+	Transform3D current_global_transform;
+
 #ifdef DEBUG_ENABLED
 	RID debug_instance;
 	Ref<ArrayMesh> debug_mesh;
@@ -64,6 +66,8 @@ protected:
 public:
 	NavigationLink3D();
 	~NavigationLink3D();
+
+	RID get_rid() const;
 
 	void set_enabled(bool p_enabled);
 	bool is_enabled() const { return enabled; }

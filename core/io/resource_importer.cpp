@@ -118,8 +118,20 @@ Error ResourceFormatImporter::_get_path_and_type(const String &p_path, PathAndTy
 	}
 #endif
 
-	if (r_path_and_type.path.is_empty() || r_path_and_type.type.is_empty()) {
+	if (r_path_and_type.type.is_empty()) {
 		return ERR_FILE_CORRUPT;
+	}
+	if (r_path_and_type.path.is_empty()) {
+		// Some importers may not write files to the .godot folder, so the path can be empty.
+		if (r_path_and_type.importer.is_empty()) {
+			return ERR_FILE_CORRUPT;
+		}
+
+		// It's only invalid if the extension for the importer is not empty.
+		Ref<ResourceImporter> importer = get_importer_by_name(r_path_and_type.importer);
+		if (importer.is_null() || !importer->get_save_extension().is_empty()) {
+			return ERR_FILE_CORRUPT;
+		}
 	}
 	return OK;
 }
@@ -394,6 +406,15 @@ Ref<ResourceImporter> ResourceFormatImporter::get_importer_by_name(const String 
 	return Ref<ResourceImporter>();
 }
 
+void ResourceFormatImporter::add_importer(const Ref<ResourceImporter> &p_importer, bool p_first_priority) {
+	ERR_FAIL_COND(p_importer.is_null());
+	if (p_first_priority) {
+		importers.insert(0, p_importer);
+	} else {
+		importers.push_back(p_importer);
+	}
+}
+
 void ResourceFormatImporter::get_importers_for_extension(const String &p_extension, List<Ref<ResourceImporter>> *r_importers) {
 	for (int i = 0; i < importers.size(); i++) {
 		List<String> local_exts;
@@ -401,6 +422,7 @@ void ResourceFormatImporter::get_importers_for_extension(const String &p_extensi
 		for (const String &F : local_exts) {
 			if (p_extension.to_lower() == F) {
 				r_importers->push_back(importers[i]);
+				break;
 			}
 		}
 	}
@@ -472,18 +494,11 @@ ResourceFormatImporter::ResourceFormatImporter() {
 	singleton = this;
 }
 
+//////////////
+
 void ResourceImporter::_bind_methods() {
 	BIND_ENUM_CONSTANT(IMPORT_ORDER_DEFAULT);
 	BIND_ENUM_CONSTANT(IMPORT_ORDER_SCENE);
-}
-
-void ResourceFormatImporter::add_importer(const Ref<ResourceImporter> &p_importer, bool p_first_priority) {
-	ERR_FAIL_COND(p_importer.is_null());
-	if (p_first_priority) {
-		importers.insert(0, p_importer);
-	} else {
-		importers.push_back(p_importer);
-	}
 }
 
 /////

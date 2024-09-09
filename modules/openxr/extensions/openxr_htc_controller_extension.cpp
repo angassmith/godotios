@@ -29,15 +29,25 @@
 /**************************************************************************/
 
 #include "openxr_htc_controller_extension.h"
-#include "../action_map/openxr_interaction_profile_meta_data.h"
+
+#include "../action_map/openxr_interaction_profile_metadata.h"
 
 HashMap<String, bool *> OpenXRHTCControllerExtension::get_requested_extensions() {
 	HashMap<String, bool *> request_extensions;
 
 	request_extensions[XR_HTC_VIVE_COSMOS_CONTROLLER_INTERACTION_EXTENSION_NAME] = &available[HTC_VIVE_COSMOS];
 	request_extensions[XR_HTC_VIVE_FOCUS3_CONTROLLER_INTERACTION_EXTENSION_NAME] = &available[HTC_VIVE_FOCUS3];
+	request_extensions[XR_HTC_HAND_INTERACTION_EXTENSION_NAME] = &available[HTC_HAND_INTERACTION];
 
 	return request_extensions;
+}
+
+PackedStringArray OpenXRHTCControllerExtension::get_suggested_tracker_names() {
+	PackedStringArray arr = {
+		"/user/hand_htc/left",
+		"/user/hand_htc/right",
+	};
+	return arr;
 }
 
 bool OpenXRHTCControllerExtension::is_available(HTCControllers p_type) {
@@ -45,8 +55,11 @@ bool OpenXRHTCControllerExtension::is_available(HTCControllers p_type) {
 }
 
 void OpenXRHTCControllerExtension::on_register_metadata() {
-	OpenXRInteractionProfileMetaData *metadata = OpenXRInteractionProfileMetaData::get_singleton();
+	OpenXRInteractionProfileMetadata *metadata = OpenXRInteractionProfileMetadata::get_singleton();
 	ERR_FAIL_NULL(metadata);
+
+	metadata->register_top_level_path("HTC left hand tracker", "/user/hand_htc/left", XR_HTC_HAND_INTERACTION_EXTENSION_NAME);
+	metadata->register_top_level_path("HTC right hand tracker", "/user/hand_htc/right", XR_HTC_HAND_INTERACTION_EXTENSION_NAME);
 
 	// HTC Vive Cosmos controller
 	metadata->register_interaction_profile("Vive Cosmos controller", "/interaction_profiles/htc/vive_cosmos_controller", XR_HTC_VIVE_COSMOS_CONTROLLER_INTERACTION_EXTENSION_NAME);
@@ -108,7 +121,7 @@ void OpenXRHTCControllerExtension::on_register_metadata() {
 	metadata->register_io_path("/interaction_profiles/htc/vive_focus3_controller", "Trigger touch", "/user/hand/left", "/user/hand/left/input/trigger/touch", "", OpenXRAction::OPENXR_ACTION_BOOL);
 	metadata->register_io_path("/interaction_profiles/htc/vive_focus3_controller", "Trigger", "/user/hand/right", "/user/hand/right/input/trigger/value", "", OpenXRAction::OPENXR_ACTION_FLOAT);
 	metadata->register_io_path("/interaction_profiles/htc/vive_focus3_controller", "Trigger click", "/user/hand/right", "/user/hand/right/input/trigger/click", "", OpenXRAction::OPENXR_ACTION_BOOL);
-	metadata->register_io_path("/interaction_profiles/htc/vive_focus3_controller", "Trigger touch", "/user/hand/right", "/user/hand/right/input/trigger/touch	", "", OpenXRAction::OPENXR_ACTION_BOOL);
+	metadata->register_io_path("/interaction_profiles/htc/vive_focus3_controller", "Trigger touch", "/user/hand/right", "/user/hand/right/input/trigger/touch", "", OpenXRAction::OPENXR_ACTION_BOOL);
 
 	metadata->register_io_path("/interaction_profiles/htc/vive_focus3_controller", "Squeeze click", "/user/hand/left", "/user/hand/left/input/squeeze/click", "", OpenXRAction::OPENXR_ACTION_BOOL);
 	metadata->register_io_path("/interaction_profiles/htc/vive_focus3_controller", "Squeeze touch", "/user/hand/left", "/user/hand/left/input/squeeze/touch", "", OpenXRAction::OPENXR_ACTION_BOOL);
@@ -122,8 +135,22 @@ void OpenXRHTCControllerExtension::on_register_metadata() {
 	metadata->register_io_path("/interaction_profiles/htc/vive_focus3_controller", "Thumbstick click", "/user/hand/right", "/user/hand/right/input/thumbstick/click", "", OpenXRAction::OPENXR_ACTION_BOOL);
 	metadata->register_io_path("/interaction_profiles/htc/vive_focus3_controller", "Thumbstick touch", "/user/hand/right", "/user/hand/right/input/thumbstick/touch", "", OpenXRAction::OPENXR_ACTION_BOOL);
 
+	metadata->register_io_path("/interaction_profiles/htc/vive_focus3_controller", "Thumbrest touch", "/user/hand/left", "/user/hand/left/input/thumbrest/touch", "", OpenXRAction::OPENXR_ACTION_BOOL);
 	metadata->register_io_path("/interaction_profiles/htc/vive_focus3_controller", "Thumbrest touch", "/user/hand/right", "/user/hand/right/input/thumbrest/touch", "", OpenXRAction::OPENXR_ACTION_BOOL);
 
 	metadata->register_io_path("/interaction_profiles/htc/vive_focus3_controller", "Haptic output", "/user/hand/left", "/user/hand/left/output/haptic", "", OpenXRAction::OPENXR_ACTION_HAPTIC);
 	metadata->register_io_path("/interaction_profiles/htc/vive_focus3_controller", "Haptic output", "/user/hand/right", "/user/hand/right/output/haptic", "", OpenXRAction::OPENXR_ACTION_HAPTIC);
+
+	// HTC Hand interaction profile
+	metadata->register_interaction_profile("HTC Hand interaction", "/interaction_profiles/htc/hand_interaction", XR_HTC_HAND_INTERACTION_EXTENSION_NAME);
+	metadata->register_io_path("/interaction_profiles/htc/hand_interaction", "Grip pose", "/user/hand_htc/left", "/user/hand_htc/left/input/grip/pose", "", OpenXRAction::OPENXR_ACTION_POSE);
+	metadata->register_io_path("/interaction_profiles/htc/hand_interaction", "Grip pose", "/user/hand_htc/right", "/user/hand_htc/right/input/grip/pose", "", OpenXRAction::OPENXR_ACTION_POSE);
+	metadata->register_io_path("/interaction_profiles/htc/hand_interaction", "Aim pose", "/user/hand_htc/left", "/user/hand_htc/left/input/aim/pose", "", OpenXRAction::OPENXR_ACTION_POSE);
+	metadata->register_io_path("/interaction_profiles/htc/hand_interaction", "Aim pose", "/user/hand_htc/right", "/user/hand_htc/right/input/aim/pose", "", OpenXRAction::OPENXR_ACTION_POSE);
+
+	metadata->register_io_path("/interaction_profiles/htc/hand_interaction", "Select (pinch)", "/user/hand_htc/left", "/user/hand_htc/left/input/select/value", "", OpenXRAction::OPENXR_ACTION_FLOAT);
+	metadata->register_io_path("/interaction_profiles/htc/hand_interaction", "Select (pinch)", "/user/hand_htc/right", "/user/hand_htc/right/input/select/value", "", OpenXRAction::OPENXR_ACTION_FLOAT);
+
+	metadata->register_io_path("/interaction_profiles/htc/hand_interaction", "Squeeze (grab)", "/user/hand_htc/left", "/user/hand_htc/left/input/squeeze/value", "", OpenXRAction::OPENXR_ACTION_FLOAT);
+	metadata->register_io_path("/interaction_profiles/htc/hand_interaction", "Squeeze (grab)", "/user/hand_htc/right", "/user/hand_htc/right/input/squeeze/value", "", OpenXRAction::OPENXR_ACTION_FLOAT);
 }

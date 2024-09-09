@@ -10,10 +10,10 @@ namespace GodotTools.Ides
 {
     public sealed partial class GodotIdeManager : Node, ISerializationListener
     {
-        private MessagingServer _messagingServer;
+        private MessagingServer? _messagingServer;
 
-        private MonoDevelop.Instance _monoDevelInstance;
-        private MonoDevelop.Instance _vsForMacInstance;
+        private MonoDevelop.Instance? _monoDevelInstance;
+        private MonoDevelop.Instance? _vsForMacInstance;
 
         private MessagingServer GetRunningOrNewServer()
         {
@@ -59,7 +59,7 @@ namespace GodotTools.Ides
             switch (editorId)
             {
                 case ExternalEditorId.None:
-                    return null;
+                    return string.Empty;
                 case ExternalEditorId.VisualStudio:
                     return "VisualStudio";
                 case ExternalEditorId.VsCode:
@@ -70,6 +70,8 @@ namespace GodotTools.Ides
                     return "VisualStudioForMac";
                 case ExternalEditorId.MonoDevelop:
                     return "MonoDevelop";
+                case ExternalEditorId.CustomEditor:
+                    return "CustomEditor";
                 default:
                     throw new NotImplementedException();
             }
@@ -77,7 +79,7 @@ namespace GodotTools.Ides
 
         public async Task<EditorPick?> LaunchIdeAsync(int millisecondsTimeout = 10000)
         {
-            var editorSettings = GodotSharpEditor.Instance.GetEditorInterface().GetEditorSettings();
+            var editorSettings = EditorInterface.Singleton.GetEditorSettings();
             var editorId = editorSettings.GetSetting(GodotSharpEditor.Settings.ExternalEditor).As<ExternalEditorId>();
             string editorIdentity = GetExternalEditorIdentity(editorId);
 
@@ -105,6 +107,7 @@ namespace GodotTools.Ides
                 case ExternalEditorId.VisualStudio:
                 case ExternalEditorId.VsCode:
                 case ExternalEditorId.Rider:
+                case ExternalEditorId.CustomEditor:
                     throw new NotSupportedException();
                 case ExternalEditorId.VisualStudioForMac:
                     goto case ExternalEditorId.MonoDevelop;

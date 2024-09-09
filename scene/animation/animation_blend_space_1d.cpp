@@ -33,12 +33,17 @@
 #include "animation_blend_tree.h"
 
 void AnimationNodeBlendSpace1D::get_parameter_list(List<PropertyInfo> *r_list) const {
+	AnimationNode::get_parameter_list(r_list);
 	r_list->push_back(PropertyInfo(Variant::FLOAT, blend_position));
 	r_list->push_back(PropertyInfo(Variant::INT, closest, PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NONE));
-	r_list->push_back(PropertyInfo(Variant::FLOAT, length_internal, PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NONE));
 }
 
 Variant AnimationNodeBlendSpace1D::get_parameter_default_value(const StringName &p_parameter) const {
+	Variant ret = AnimationNode::get_parameter_default_value(p_parameter);
+	if (ret != Variant()) {
+		return ret;
+	}
+
 	if (p_parameter == closest) {
 		return -1;
 	} else {
@@ -46,7 +51,7 @@ Variant AnimationNodeBlendSpace1D::get_parameter_default_value(const StringName 
 	}
 }
 
-Ref<AnimationNode> AnimationNodeBlendSpace1D::get_child_by_name(const StringName &p_name) {
+Ref<AnimationNode> AnimationNodeBlendSpace1D::get_child_by_name(const StringName &p_name) const {
 	return get_blend_point_node(p_name.operator String().to_int());
 }
 
@@ -177,12 +182,12 @@ void AnimationNodeBlendSpace1D::set_blend_point_node(int p_point, const Ref<Anim
 }
 
 float AnimationNodeBlendSpace1D::get_blend_point_position(int p_point) const {
-	ERR_FAIL_INDEX_V(p_point, blend_points_used, 0);
+	ERR_FAIL_INDEX_V(p_point, MAX_BLEND_POINTS, 0);
 	return blend_points[p_point].position;
 }
 
 Ref<AnimationRootNode> AnimationNodeBlendSpace1D::get_blend_point_node(int p_point) const {
-	ERR_FAIL_INDEX_V(p_point, blend_points_used, Ref<AnimationRootNode>());
+	ERR_FAIL_INDEX_V(p_point, MAX_BLEND_POINTS, Ref<AnimationRootNode>());
 	return blend_points[p_point].node;
 }
 
@@ -272,24 +277,24 @@ void AnimationNodeBlendSpace1D::_add_blend_point(int p_index, const Ref<Animatio
 	}
 }
 
-double AnimationNodeBlendSpace1D::process(double p_time, bool p_seek, bool p_is_external_seeking) {
-	if (blend_points_used == 0) {
-		return 0.0;
+AnimationNode::NodeTimeInfo AnimationNodeBlendSpace1D::_process(const AnimationMixer::PlaybackInfo p_playback_info, bool p_test_only) {
+	if (!blend_points_used) {
+		return NodeTimeInfo();
 	}
+
+	AnimationMixer::PlaybackInfo pi = p_playback_info;
 
 	if (blend_points_used == 1) {
 		// only one point available, just play that animation
-		return blend_node(blend_points[0].name, blend_points[0].node, p_time, p_seek, p_is_external_seeking, 1.0, FILTER_IGNORE, true);
+		pi.weight = 1.0;
+		return blend_node(blend_points[0].node, blend_points[0].name, pi, FILTER_IGNORE, true, p_test_only);
 	}
 
 	double blend_pos = get_parameter(blend_position);
 	int cur_closest = get_parameter(closest);
-	double cur_length_internal = get_parameter(length_internal);
-	double max_time_remaining = 0.0;
+	NodeTimeInfo mind;
 
 	if (blend_mode == BLEND_MODE_INTERPOLATED) {
-		float weights[MAX_BLEND_POINTS] = {};
-
 		int point_lower = -1;
 		float pos_lower = 0.0;
 		int point_higher = -1;
@@ -300,26 +305,18 @@ double AnimationNodeBlendSpace1D::process(double p_time, bool p_seek, bool p_is_
 			float pos = blend_points[i].position;
 
 			if (pos <= blend_pos) {
-				if (point_lower == -1) {
-					point_lower = i;
-					pos_lower = pos;
-				} else if ((blend_pos - pos) < (blend_pos - pos_lower)) {
+				if (point_lower == -1 || pos > pos_lower) {
 					point_lower = i;
 					pos_lower = pos;
 				}
-			} else {
-				if (point_higher == -1) {
-					point_higher = i;
-					pos_higher = pos;
-				} else if ((pos - blend_pos) < (pos_higher - blend_pos)) {
-					point_higher = i;
-					pos_higher = pos;
-				}
+			} else if (point_higher == -1 || pos < pos_higher) {
+				point_higher = i;
+				pos_higher = pos;
 			}
 		}
 
 		// fill in weights
-
+		float weights[MAX_BLEND_POINTS] = {};
 		if (point_lower == -1 && point_higher != -1) {
 			// we are on the left side, no other point to the left
 			// we just play the next point.
@@ -348,13 +345,20 @@ double AnimationNodeBlendSpace1D::process(double p_time, bool p_seek, bool p_is_
 		}
 
 		// actually blend the animations now
-
+		bool first = true;
+		double max_weight = 0.0;
 		for (int i = 0; i < blend_points_used; i++) {
 			if (i == point_lower || i == point_higher) {
-				double remaining = blend_node(blend_points[i].name, blend_points[i].node, p_time, p_seek, p_is_external_seeking, weights[i], FILTER_IGNORE, true);
-				max_time_remaining = MAX(max_time_remaining, remaining);
+				pi.weight = weights[i];
+				NodeTimeInfo t = blend_node(blend_points[i].node, blend_points[i].name, pi, FILTER_IGNORE, true, p_test_only);
+				if (first || pi.weight > max_weight) {
+					max_weight = pi.weight;
+					mind = t;
+					first = false;
+				}
 			} else if (sync) {
-				blend_node(blend_points[i].name, blend_points[i].node, p_time, p_seek, p_is_external_seeking, 0, FILTER_IGNORE, true);
+				pi.weight = 0;
+				blend_node(blend_points[i].node, blend_points[i].name, pi, FILTER_IGNORE, true, p_test_only);
 			}
 		}
 	} else {
@@ -370,7 +374,7 @@ double AnimationNodeBlendSpace1D::process(double p_time, bool p_seek, bool p_is_
 		}
 
 		if (new_closest != cur_closest && new_closest != -1) {
-			double from = 0.0;
+			NodeTimeInfo from;
 			if (blend_mode == BLEND_MODE_DISCRETE_CARRY && cur_closest != -1) {
 				//for ping-pong loop
 				Ref<AnimationNodeAnimation> na_c = static_cast<Ref<AnimationNodeAnimation>>(blend_points[cur_closest].node);
@@ -379,30 +383,34 @@ double AnimationNodeBlendSpace1D::process(double p_time, bool p_seek, bool p_is_
 					na_n->set_backward(na_c->is_backward());
 				}
 				//see how much animation remains
-				from = cur_length_internal - blend_node(blend_points[cur_closest].name, blend_points[cur_closest].node, p_time, false, p_is_external_seeking, 0.0, FILTER_IGNORE, true);
+				pi.seeked = false;
+				pi.weight = 0;
+				from = blend_node(blend_points[cur_closest].node, blend_points[cur_closest].name, pi, FILTER_IGNORE, true, p_test_only);
 			}
 
-			max_time_remaining = blend_node(blend_points[new_closest].name, blend_points[new_closest].node, from, true, p_is_external_seeking, 1.0, FILTER_IGNORE, true);
-			cur_length_internal = from + max_time_remaining;
-
+			pi.time = from.position;
+			pi.seeked = true;
+			pi.weight = 1.0;
+			mind = blend_node(blend_points[new_closest].node, blend_points[new_closest].name, pi, FILTER_IGNORE, true, p_test_only);
 			cur_closest = new_closest;
-
 		} else {
-			max_time_remaining = blend_node(blend_points[cur_closest].name, blend_points[cur_closest].node, p_time, p_seek, p_is_external_seeking, 1.0, FILTER_IGNORE, true);
+			pi.weight = 1.0;
+			mind = blend_node(blend_points[cur_closest].node, blend_points[cur_closest].name, pi, FILTER_IGNORE, true, p_test_only);
 		}
 
 		if (sync) {
+			pi = p_playback_info;
+			pi.weight = 0;
 			for (int i = 0; i < blend_points_used; i++) {
 				if (i != cur_closest) {
-					blend_node(blend_points[i].name, blend_points[i].node, p_time, p_seek, p_is_external_seeking, 0, FILTER_IGNORE, true);
+					blend_node(blend_points[i].node, blend_points[i].name, pi, FILTER_IGNORE, true, p_test_only);
 				}
 			}
 		}
 	}
 
-	set_parameter(this->closest, cur_closest);
-	set_parameter(this->length_internal, cur_length_internal);
-	return max_time_remaining;
+	set_parameter(closest, cur_closest);
+	return mind;
 }
 
 String AnimationNodeBlendSpace1D::get_caption() const {

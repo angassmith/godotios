@@ -98,14 +98,12 @@ private:
 	}
 
 	static Mutex material_mutex;
-	static SelfList<CanvasItemMaterial>::List *dirty_materials;
+	static SelfList<CanvasItemMaterial>::List dirty_materials;
 	SelfList<CanvasItemMaterial> element;
 
 	void _update_shader();
 	_FORCE_INLINE_ void _queue_shader_change();
-	_FORCE_INLINE_ bool _is_shader_dirty() const;
 
-	bool is_initialized = false;
 	BlendMode blend_mode = BLEND_MODE_MIX;
 	LightMode light_mode = LIGHT_MODE_NORMAL;
 	bool particles_animation = false;

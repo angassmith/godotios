@@ -30,7 +30,6 @@
 
 #include "noise_texture_2d.h"
 
-#include "core/core_string_names.h"
 #include "noise.h"
 
 NoiseTexture2D::NoiseTexture2D() {
@@ -44,14 +43,12 @@ NoiseTexture2D::~NoiseTexture2D() {
 	if (texture.is_valid()) {
 		RS::get_singleton()->free(texture);
 	}
-	noise_thread.wait_to_finish();
+	if (noise_thread.is_started()) {
+		noise_thread.wait_to_finish();
+	}
 }
 
 void NoiseTexture2D::_bind_methods() {
-	ClassDB::bind_method(D_METHOD("_update_texture"), &NoiseTexture2D::_update_texture);
-	ClassDB::bind_method(D_METHOD("_generate_texture"), &NoiseTexture2D::_generate_texture);
-	ClassDB::bind_method(D_METHOD("_thread_done", "image"), &NoiseTexture2D::_thread_done);
-
 	ClassDB::bind_method(D_METHOD("set_width", "width"), &NoiseTexture2D::set_width);
 	ClassDB::bind_method(D_METHOD("set_height", "height"), &NoiseTexture2D::set_height);
 
@@ -122,6 +119,7 @@ void NoiseTexture2D::_set_texture_image(const Ref<Image> &p_image) {
 		} else {
 			texture = RS::get_singleton()->texture_2d_create(p_image);
 		}
+		RS::get_singleton()->texture_set_path(texture, get_path());
 	}
 	emit_changed();
 }
@@ -137,7 +135,7 @@ void NoiseTexture2D::_thread_done(const Ref<Image> &p_image) {
 
 void NoiseTexture2D::_thread_function(void *p_ud) {
 	NoiseTexture2D *tex = static_cast<NoiseTexture2D *>(p_ud);
-	tex->call_deferred(SNAME("_thread_done"), tex->_generate_texture());
+	callable_mp(tex, &NoiseTexture2D::_thread_done).call_deferred(tex->_generate_texture());
 }
 
 void NoiseTexture2D::_queue_update() {
@@ -146,7 +144,7 @@ void NoiseTexture2D::_queue_update() {
 	}
 
 	update_queued = true;
-	call_deferred(SNAME("_update_texture"));
+	callable_mp(this, &NoiseTexture2D::_update_texture).call_deferred();
 }
 
 Ref<Image> NoiseTexture2D::_generate_texture() {
@@ -220,11 +218,11 @@ void NoiseTexture2D::set_noise(Ref<Noise> p_noise) {
 		return;
 	}
 	if (noise.is_valid()) {
-		noise->disconnect(CoreStringNames::get_singleton()->changed, callable_mp(this, &NoiseTexture2D::_queue_update));
+		noise->disconnect_changed(callable_mp(this, &NoiseTexture2D::_queue_update));
 	}
 	noise = p_noise;
 	if (noise.is_valid()) {
-		noise->connect(CoreStringNames::get_singleton()->changed, callable_mp(this, &NoiseTexture2D::_queue_update));
+		noise->connect_changed(callable_mp(this, &NoiseTexture2D::_queue_update));
 	}
 	_queue_update();
 }
@@ -344,11 +342,11 @@ void NoiseTexture2D::set_color_ramp(const Ref<Gradient> &p_gradient) {
 		return;
 	}
 	if (color_ramp.is_valid()) {
-		color_ramp->disconnect(CoreStringNames::get_singleton()->changed, callable_mp(this, &NoiseTexture2D::_queue_update));
+		color_ramp->disconnect_changed(callable_mp(this, &NoiseTexture2D::_queue_update));
 	}
 	color_ramp = p_gradient;
 	if (color_ramp.is_valid()) {
-		color_ramp->connect(CoreStringNames::get_singleton()->changed, callable_mp(this, &NoiseTexture2D::_queue_update));
+		color_ramp->connect_changed(callable_mp(this, &NoiseTexture2D::_queue_update));
 	}
 	_queue_update();
 }

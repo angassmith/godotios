@@ -88,6 +88,12 @@ TEST_CASE("[Dictionary] Assignment using bracket notation ([])") {
 	CHECK(int(map[0]) == 400);
 	// Check that assigning 0 doesn't overwrite the value for `false`.
 	CHECK(int(map[false]) == 128);
+
+	// Ensure read-only maps aren't modified by non-existing keys.
+	const int length = map.size();
+	map.make_read_only();
+	CHECK(int(map["This key does not exist"].get_type()) == Variant::NIL);
+	CHECK(map.size() == length);
 }
 
 TEST_CASE("[Dictionary] get_key_lists()") {
@@ -99,7 +105,7 @@ TEST_CASE("[Dictionary] get_key_lists()") {
 	map[1] = 3;
 	map.get_key_list(ptr);
 	CHECK(keys.size() == 1);
-	CHECK(int(keys[0]) == 1);
+	CHECK(int(keys.front()->get()) == 1);
 	map[2] = 4;
 	map.get_key_list(ptr);
 	CHECK(keys.size() == 3);

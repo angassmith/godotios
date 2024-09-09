@@ -31,20 +31,39 @@
 #ifndef NAVIGATION_REGION_2D_H
 #define NAVIGATION_REGION_2D_H
 
-#include "scene/resources/navigation_polygon.h"
+#include "scene/resources/2d/navigation_polygon.h"
 
 class NavigationRegion2D : public Node2D {
 	GDCLASS(NavigationRegion2D, Node2D);
 
 	bool enabled = true;
+	bool use_edge_connections = true;
+
 	RID region;
+	RID map_override;
 	uint32_t navigation_layers = 1;
 	real_t enter_cost = 0.0;
 	real_t travel_cost = 1.0;
 	Ref<NavigationPolygon> navigation_polygon;
 
+	Transform2D current_global_transform;
+
 	void _navigation_polygon_changed();
-	void _map_changed(RID p_RID);
+
+#ifdef DEBUG_ENABLED
+private:
+	RID debug_mesh_rid;
+	RID debug_instance_rid;
+
+	bool debug_mesh_dirty = true;
+
+	void _free_debug();
+	void _update_debug_mesh();
+	void _update_debug_edge_connections_mesh();
+	void _update_debug_baking_rect();
+	void _navigation_map_changed(RID p_map);
+	void _navigation_debug_changed();
+#endif // DEBUG_ENABLED
 
 protected:
 	void _notification(int p_what);
@@ -60,9 +79,16 @@ public:
 	virtual Rect2 _edit_get_rect() const override;
 	virtual bool _edit_is_selected_on_click(const Point2 &p_point, double p_tolerance) const override;
 #endif
+	RID get_rid() const;
 
 	void set_enabled(bool p_enabled);
 	bool is_enabled() const;
+
+	void set_navigation_map(RID p_navigation_map);
+	RID get_navigation_map() const;
+
+	void set_use_edge_connections(bool p_enabled);
+	bool get_use_edge_connections() const;
 
 	void set_navigation_layers(uint32_t p_navigation_layers);
 	uint32_t get_navigation_layers() const;
@@ -83,8 +109,17 @@ public:
 
 	PackedStringArray get_configuration_warnings() const override;
 
+	void bake_navigation_polygon(bool p_on_thread);
+	void _bake_finished(Ref<NavigationPolygon> p_navigation_polygon);
+	bool is_baking() const;
+
 	NavigationRegion2D();
 	~NavigationRegion2D();
+
+private:
+	void _region_enter_navigation_map();
+	void _region_exit_navigation_map();
+	void _region_update_transform();
 };
 
 #endif // NAVIGATION_REGION_2D_H
