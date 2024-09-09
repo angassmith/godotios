@@ -32,6 +32,7 @@
 #define JOYPAD_LINUX_H
 
 #ifdef JOYDEV_ENABLED
+
 #include "core/input/input.h"
 #include "core/os/mutex.h"
 #include "core/os/thread.h"
@@ -92,6 +93,21 @@ private:
 	Mutex joypads_mutex[JOYPADS_MAX];
 
 	Vector<String> attached_devices;
+
+	// List of lowercase words that will prevent the controller from being recognized if its name matches.
+	// This is done to prevent trackpads, graphics tablets and motherboard LED controllers from being
+	// recognized as controllers (and taking up controller ID slots as a result).
+	// Only whole words are matched within the controller name string. The match is case-insensitive.
+	const Vector<String> banned_words = {
+		"touchpad", // Matches e.g. "SynPS/2 Synaptics TouchPad", "Sony Interactive Entertainment DualSense Wireless Controller Touchpad"
+		"trackpad",
+		"clickpad",
+		"keyboard", // Matches e.g. "PG-90215 Keyboard", "Usb Keyboard Usb Keyboard Consumer Control"
+		"mouse", // Matches e.g. "Mouse passthrough"
+		"pen", // Matches e.g. "Wacom One by Wacom S Pen"
+		"finger", // Matches e.g. "Wacom HID 495F Finger"
+		"led", // Matches e.g. "ASRock LED Controller"
+	};
 
 	static void monitor_joypads_thread_func(void *p_user);
 	void monitor_joypads_thread_run();

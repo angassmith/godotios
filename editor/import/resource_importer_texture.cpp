@@ -36,8 +36,11 @@
 #include "core/version.h"
 #include "editor/editor_file_system.h"
 #include "editor/editor_node.h"
-#include "editor/editor_scale.h"
-#include "editor/editor_settings.h"
+#include "editor/gui/editor_toaster.h"
+#include "editor/import/resource_importer_texture_settings.h"
+#include "editor/themes/editor_scale.h"
+#include "editor/themes/editor_theme_manager.h"
+#include "scene/resources/compressed_texture.h"
 
 void ResourceImporterTexture::_texture_reimport_roughness(const Ref<CompressedTexture2D> &p_tex, const String &p_normal_path, RS::TextureDetectRoughnessChannel p_channel) {
 	ERR_FAIL_COND(p_tex.is_null());
@@ -106,13 +109,21 @@ void ResourceImporterTexture::update_imports() {
 			bool changed = false;
 
 			if (E.value.flags & MAKE_NORMAL_FLAG && int(cf->get_value("params", "compress/normal_map")) == 0) {
-				print_line(vformat(TTR("%s: Texture detected as used as a normal map in 3D. Enabling red-green texture compression to reduce memory usage (blue channel is discarded)."), String(E.key)));
+				String message = vformat(TTR("%s: Texture detected as used as a normal map in 3D. Enabling red-green texture compression to reduce memory usage (blue channel is discarded)."), String(E.key));
+#ifdef TOOLS_ENABLED
+				EditorToaster::get_singleton()->popup_str(message);
+#endif
+				print_line(message);
 				cf->set_value("params", "compress/normal_map", 1);
 				changed = true;
 			}
 
 			if (E.value.flags & MAKE_ROUGHNESS_FLAG && int(cf->get_value("params", "roughness/mode")) == 0) {
-				print_line(vformat(TTR("%s: Texture detected as used as a roughness map in 3D. Enabling roughness limiter based on the detected associated normal map at %s."), String(E.key), E.value.normal_path_for_roughness));
+				String message = vformat(TTR("%s: Texture detected as used as a roughness map in 3D. Enabling roughness limiter based on the detected associated normal map at %s."), String(E.key), E.value.normal_path_for_roughness);
+#ifdef TOOLS_ENABLED
+				EditorToaster::get_singleton()->popup_str(message);
+#endif
+				print_line(message);
 				cf->set_value("params", "roughness/mode", E.value.channel_for_roughness + 2);
 				cf->set_value("params", "roughness/src_normal", E.value.normal_path_for_roughness);
 				changed = true;
@@ -129,7 +140,11 @@ void ResourceImporterTexture::update_imports() {
 					cf->set_value("params", "compress/mode", COMPRESS_BASIS_UNIVERSAL);
 					compress_string = "Basis Universal";
 				}
-				print_line(vformat(TTR("%s: Texture detected as used in 3D. Enabling mipmap generation and setting the texture compression mode to %s."), String(E.key), compress_string));
+				String message = vformat(TTR("%s: Texture detected as used in 3D. Enabling mipmap generation and setting the texture compression mode to %s."), String(E.key), compress_string);
+#ifdef TOOLS_ENABLED
+				EditorToaster::get_singleton()->popup_str(message);
+#endif
+				print_line(message);
 				cf->set_value("params", "mipmaps/generate", true);
 				changed = true;
 			}
@@ -254,9 +269,9 @@ void ResourceImporterTexture::save_to_ctex_format(Ref<FileAccess> f, const Ref<I
 			for (int i = 0; i < p_image->get_mipmap_count() + 1; i++) {
 				Vector<uint8_t> data;
 				if (use_webp) {
-					data = Image::webp_lossless_packer(p_image->get_image_from_mipmap(i));
+					data = Image::webp_lossless_packer(i ? p_image->get_image_from_mipmap(i) : p_image);
 				} else {
-					data = Image::png_packer(p_image->get_image_from_mipmap(i));
+					data = Image::png_packer(i ? p_image->get_image_from_mipmap(i) : p_image);
 				}
 				int data_len = data.size();
 				f->store_32(data_len);
@@ -274,7 +289,7 @@ void ResourceImporterTexture::save_to_ctex_format(Ref<FileAccess> f, const Ref<I
 			f->store_32(p_image->get_format());
 
 			for (int i = 0; i < p_image->get_mipmap_count() + 1; i++) {
-				Vector<uint8_t> data = Image::webp_lossy_packer(p_image->get_image_from_mipmap(i), p_lossy_quality);
+				Vector<uint8_t> data = Image::webp_lossy_packer(i ? p_image->get_image_from_mipmap(i) : p_image, p_lossy_quality);
 				int data_len = data.size();
 				f->store_32(data_len);
 
@@ -365,14 +380,6 @@ void ResourceImporterTexture::_save_ctex(const Ref<Image> &p_image, const String
 	f->store_32(0);
 	f->store_32(0);
 
-	/*
-	print_line("streamable " + itos(p_streamable));
-	print_line("mipmaps " + itos(p_mipmaps));
-	print_line("detect_3d " + itos(p_detect_3d));
-	print_line("roughness " + itos(p_detect_roughness));
-	print_line("normal " + itos(p_detect_normal));
-*/
-
 	if ((p_compress_mode == COMPRESS_LOSSLESS || p_compress_mode == COMPRESS_LOSSY) && p_image->get_format() > Image::FORMAT_RGBA8) {
 		p_compress_mode = COMPRESS_VRAM_UNCOMPRESSED; //these can't go as lossy
 	}
@@ -405,6 +412,20 @@ void ResourceImporterTexture::_save_ctex(const Ref<Image> &p_image, const String
 	Image::UsedChannels used_channels = image->detect_used_channels(csource);
 
 	save_to_ctex_format(f, image, p_compress_mode, used_channels, p_vram_compression, p_lossy_quality);
+}
+
+void ResourceImporterTexture::_save_editor_meta(const Dictionary &p_metadata, const String &p_to_path) {
+	Ref<FileAccess> f = FileAccess::open(p_to_path, FileAccess::WRITE);
+	ERR_FAIL_COND(f.is_null());
+
+	f->store_var(p_metadata);
+}
+
+Dictionary ResourceImporterTexture::_load_editor_meta(const String &p_path) const {
+	Ref<FileAccess> f = FileAccess::open(p_path, FileAccess::READ);
+	ERR_FAIL_COND_V_MSG(f.is_null(), Dictionary(), vformat("Missing required editor-specific import metadata for a texture (please reimport it using the 'Import' tab): '%s'", p_path));
+
+	return f->get_var();
 }
 
 Error ResourceImporterTexture::import(const String &p_source_file, const String &p_save_path, const HashMap<StringName, Variant> &p_options, List<String> *r_platform_variants, List<String> *r_gen_files, Variant *r_metadata) {
@@ -590,8 +611,8 @@ Error ResourceImporterTexture::import(const String &p_source_file, const String 
 		// Android, GLES 2.x
 
 		const bool is_hdr = (image->get_format() >= Image::FORMAT_RF && image->get_format() <= Image::FORMAT_RGBE9995);
-		const bool can_s3tc_bptc = GLOBAL_GET("rendering/textures/vram_compression/import_s3tc_bptc") || OS::get_singleton()->get_preferred_texture_format() == OS::PREFERRED_TEXTURE_FORMAT_S3TC_BPTC;
-		const bool can_etc2_astc = GLOBAL_GET("rendering/textures/vram_compression/import_etc2_astc") || OS::get_singleton()->get_preferred_texture_format() == OS::PREFERRED_TEXTURE_FORMAT_ETC2_ASTC;
+		const bool can_s3tc_bptc = ResourceImporterTextureSettings::should_import_s3tc_bptc();
+		const bool can_etc2_astc = ResourceImporterTextureSettings::should_import_etc2_astc();
 
 		// Add list of formats imported
 		if (can_s3tc_bptc) {
@@ -667,6 +688,18 @@ Error ResourceImporterTexture::import(const String &p_source_file, const String 
 
 	if (editor_image.is_valid()) {
 		_save_ctex(editor_image, p_save_path + ".editor.ctex", compress_mode, lossy, Image::COMPRESS_S3TC /*this is ignored */, mipmaps, stream, detect_3d, detect_roughness, detect_normal, force_normal, srgb_friendly_pack, false, mipmap_limit, normal_image, roughness_channel);
+
+		// Generate and save editor-specific metadata, which we cannot save to the .import file.
+		Dictionary editor_meta;
+
+		if (use_editor_scale) {
+			editor_meta["editor_scale"] = EDSCALE;
+		}
+		if (convert_editor_colors) {
+			editor_meta["editor_dark_theme"] = EditorThemeManager::is_dark_theme();
+		}
+
+		_save_editor_meta(editor_meta, p_save_path + ".editor.meta");
 	}
 
 	if (r_metadata) {
@@ -678,16 +711,11 @@ Error ResourceImporterTexture::import(const String &p_source_file, const String 
 
 		if (editor_image.is_valid()) {
 			meta["has_editor_variant"] = true;
-			if (use_editor_scale) {
-				meta["editor_scale"] = EDSCALE;
-			}
-			if (convert_editor_colors) {
-				meta["editor_dark_theme"] = EditorSettings::get_singleton()->is_dark_theme();
-			}
 		}
 
 		*r_metadata = meta;
 	}
+
 	return OK;
 }
 
@@ -713,14 +741,21 @@ String ResourceImporterTexture::get_import_settings_string() const {
 }
 
 bool ResourceImporterTexture::are_import_settings_valid(const String &p_path) const {
-	//will become invalid if formats are missing to import
 	Dictionary meta = ResourceFormatImporter::get_singleton()->get_resource_metadata(p_path);
 
 	if (meta.has("has_editor_variant")) {
-		if (meta.has("editor_scale") && (float)meta["editor_scale"] != EDSCALE) {
+		String imported_path = ResourceFormatImporter::get_singleton()->get_internal_resource_path(p_path);
+		if (!FileAccess::exists(imported_path)) {
 			return false;
 		}
-		if (meta.has("editor_dark_theme") && (bool)meta["editor_dark_theme"] != EditorSettings::get_singleton()->is_dark_theme()) {
+
+		String editor_meta_path = imported_path.replace(".editor.ctex", ".editor.meta");
+		Dictionary editor_meta = _load_editor_meta(editor_meta_path);
+
+		if (editor_meta.has("editor_scale") && (float)editor_meta["editor_scale"] != EDSCALE) {
+			return false;
+		}
+		if (editor_meta.has("editor_dark_theme") && (bool)editor_meta["editor_dark_theme"] != EditorThemeManager::is_dark_theme()) {
 			return false;
 		}
 	}
@@ -734,6 +769,7 @@ bool ResourceImporterTexture::are_import_settings_valid(const String &p_path) co
 		return true; // Do not care about non-VRAM.
 	}
 
+	// Will become invalid if formats are missing to import.
 	Vector<String> formats_imported;
 	if (meta.has("imported_formats")) {
 		formats_imported = meta["imported_formats"];
@@ -762,12 +798,19 @@ bool ResourceImporterTexture::are_import_settings_valid(const String &p_path) co
 
 ResourceImporterTexture *ResourceImporterTexture::singleton = nullptr;
 
-ResourceImporterTexture::ResourceImporterTexture() {
-	singleton = this;
+ResourceImporterTexture::ResourceImporterTexture(bool p_singleton) {
+	// This should only be set through the EditorNode.
+	if (p_singleton) {
+		singleton = this;
+	}
+
 	CompressedTexture2D::request_3d_callback = _texture_reimport_3d;
 	CompressedTexture2D::request_roughness_callback = _texture_reimport_roughness;
 	CompressedTexture2D::request_normal_callback = _texture_reimport_normal;
 }
 
 ResourceImporterTexture::~ResourceImporterTexture() {
+	if (singleton == this) {
+		singleton = nullptr;
+	}
 }

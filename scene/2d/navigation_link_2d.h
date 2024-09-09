@@ -45,6 +45,8 @@ class NavigationLink2D : public Node2D {
 	real_t enter_cost = 0.0;
 	real_t travel_cost = 1.0;
 
+	Transform2D current_global_transform;
+
 protected:
 	static void _bind_methods();
 	void _notification(int p_what);
@@ -59,6 +61,7 @@ public:
 	virtual Rect2 _edit_get_rect() const override;
 	virtual bool _edit_is_selected_on_click(const Point2 &p_point, double p_tolerance) const override;
 #endif
+	RID get_rid() const;
 
 	void set_enabled(bool p_enabled);
 	bool is_enabled() const { return enabled; }

@@ -31,7 +31,7 @@
 #ifndef EDITOR_AUDIO_BUSES_H
 #define EDITOR_AUDIO_BUSES_H
 
-#include "editor/editor_plugin.h"
+#include "editor/plugins/editor_plugin.h"
 #include "scene/gui/box_container.h"
 #include "scene/gui/button.h"
 #include "scene/gui/control.h"
@@ -172,14 +172,11 @@ class EditorAudioBuses : public VBoxContainer {
 	Timer *save_timer = nullptr;
 	String edited_path;
 
-	bool renaming_buses = false;
-	void _set_renaming_buses(bool p_renaming);
-
-	void _add_bus();
-	void _update_buses();
+	void _rebuild_buses();
 	void _update_bus(int p_index);
 	void _update_sends();
 
+	void _add_bus();
 	void _delete_bus(Object *p_which);
 	void _duplicate_bus(int p_which);
 	void _reset_bus_volume(Object *p_which);
@@ -244,23 +241,31 @@ private:
 
 	List<AudioNotch> notches;
 
+	struct ThemeCache {
+		Color notch_color;
+
+		Ref<Font> font;
+		int font_size = 0;
+	} theme_cache;
+
 public:
 	const float line_length = 5.0f;
 	const float label_space = 2.0f;
 	const float btm_padding = 9.0f;
 	const float top_padding = 5.0f;
-	Color notch_color;
 
 	void add_notch(float p_normalized_offset, float p_db_value, bool p_render_value = false);
 	Size2 get_minimum_size() const override;
 
 private:
+	virtual void _update_theme_item_cache() override;
+
 	static void _bind_methods();
 	void _notification(int p_what);
 	void _draw_audio_notches();
 
 public:
-	EditorAudioMeterNotches();
+	EditorAudioMeterNotches() {}
 };
 
 class AudioBusesEditorPlugin : public EditorPlugin {

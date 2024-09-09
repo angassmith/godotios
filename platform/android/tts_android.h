@@ -31,16 +31,20 @@
 #ifndef TTS_ANDROID_H
 #define TTS_ANDROID_H
 
+#include "core/config/project_settings.h"
 #include "core/string/ustring.h"
+#include "core/templates/hash_map.h"
 #include "core/variant/array.h"
 #include "servers/display_server.h"
 
 #include <jni.h>
 
 class TTS_Android {
+	static bool initialized;
 	static jobject tts;
 	static jclass cls;
 
+	static jmethodID _init;
 	static jmethodID _is_speaking;
 	static jmethodID _is_paused;
 	static jmethodID _get_voices;
@@ -53,6 +57,7 @@ class TTS_Android {
 
 public:
 	static void setup(jobject p_tts);
+	static void terminate();
 	static void _java_utterance_callback(int p_event, int p_id, int p_pos);
 
 	static bool is_speaking();

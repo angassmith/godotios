@@ -70,6 +70,10 @@ String EditorPaths::get_export_templates_dir() const {
 	return get_data_dir().path_join(export_templates_folder);
 }
 
+String EditorPaths::get_debug_keystore_path() const {
+	return get_data_dir().path_join("keystores/debug.keystore");
+}
+
 String EditorPaths::get_project_settings_dir() const {
 	return get_project_data_dir().path_join("editor");
 }
@@ -91,12 +95,11 @@ String EditorPaths::get_feature_profiles_dir() const {
 }
 
 void EditorPaths::create() {
-	ERR_FAIL_COND(singleton != nullptr);
-	memnew(EditorPaths());
+	memnew(EditorPaths);
 }
 
 void EditorPaths::free() {
-	ERR_FAIL_COND(singleton == nullptr);
+	ERR_FAIL_NULL(singleton);
 	memdelete(singleton);
 }
 
@@ -111,6 +114,7 @@ void EditorPaths::_bind_methods() {
 }
 
 EditorPaths::EditorPaths() {
+	ERR_FAIL_COND(singleton != nullptr);
 	singleton = this;
 
 	project_data_dir = ProjectSettings::get_singleton()->get_project_data_path();

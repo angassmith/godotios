@@ -30,12 +30,13 @@
 
 #import "godot_view.h"
 
+#import "display_layer.h"
+#import "display_server_ios.h"
+#import "godot_view_renderer.h"
+
 #include "core/config/project_settings.h"
 #include "core/os/keyboard.h"
 #include "core/string/ustring.h"
-#import "display_layer.h"
-#include "display_server_ios.h"
-#import "godot_view_renderer.h"
 
 #import <CoreMotion/CoreMotion.h>
 
@@ -81,10 +82,10 @@ static const float earth_gravity = 9.80665;
 		layer = [GodotMetalLayer layer];
 #endif
 	} else if ([driverName isEqualToString:@"opengl3"]) {
-		if (@available(iOS 13, *)) {
-			NSLog(@"OpenGL ES is deprecated on iOS 13");
-		}
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations" // OpenGL is deprecated in iOS 12.0
 		layer = [GodotOpenGLLayer layer];
+#pragma clang diagnostic pop
 	} else {
 		return nil;
 	}
@@ -166,6 +167,23 @@ static const float earth_gravity = 9.80665;
 	}
 }
 
+- (void)system_theme_changed {
+	DisplayServerIOS *ds = (DisplayServerIOS *)DisplayServer::get_singleton();
+	if (ds) {
+		ds->emit_system_theme_changed();
+	}
+}
+
+- (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
+	if (@available(iOS 13.0, *)) {
+		[super traitCollectionDidChange:previousTraitCollection];
+
+		if ([UITraitCollection currentTraitCollection].userInterfaceStyle != previousTraitCollection.userInterfaceStyle) {
+			[self system_theme_changed];
+		}
+	}
+}
+
 - (void)stopRendering {
 	if (!self.isActive) {
 		return;
@@ -173,7 +191,7 @@ static const float earth_gravity = 9.80665;
 
 	self.isActive = NO;
 
-	printf("******** stop animation!\n");
+	print_verbose("Stop animation!");
 
 	if (self.useCADisplayLink) {
 		[self.displayLink invalidate];
@@ -193,7 +211,7 @@ static const float earth_gravity = 9.80665;
 
 	self.isActive = YES;
 
-	printf("start animation!\n");
+	print_verbose("Start animation!");
 
 	if (self.useCADisplayLink) {
 		self.displayLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(drawView)];
@@ -213,7 +231,7 @@ static const float earth_gravity = 9.80665;
 
 - (void)drawView {
 	if (!self.isActive) {
-		printf("draw view not active!\n");
+		print_verbose("Draw view not active!");
 		return;
 	}
 
@@ -433,28 +451,28 @@ static const float earth_gravity = 9.80665;
 
 	switch (interfaceOrientation) {
 		case UIInterfaceOrientationLandscapeLeft: {
-			DisplayServerIOS::get_singleton()->update_gravity(-gravity.y, gravity.x, gravity.z);
-			DisplayServerIOS::get_singleton()->update_accelerometer(-(acceleration.y + gravity.y), (acceleration.x + gravity.x), acceleration.z + gravity.z);
-			DisplayServerIOS::get_singleton()->update_magnetometer(-magnetic.y, magnetic.x, magnetic.z);
-			DisplayServerIOS::get_singleton()->update_gyroscope(-rotation.y, rotation.x, rotation.z);
+			DisplayServerIOS::get_singleton()->update_gravity(Vector3(gravity.x, gravity.y, gravity.z).rotated(Vector3(0, 0, 1), -Math_PI * 0.5));
+			DisplayServerIOS::get_singleton()->update_accelerometer(Vector3(acceleration.x + gravity.x, acceleration.y + gravity.y, acceleration.z + gravity.z).rotated(Vector3(0, 0, 1), -Math_PI * 0.5));
+			DisplayServerIOS::get_singleton()->update_magnetometer(Vector3(magnetic.x, magnetic.y, magnetic.z).rotated(Vector3(0, 0, 1), -Math_PI * 0.5));
+			DisplayServerIOS::get_singleton()->update_gyroscope(Vector3(rotation.x, rotation.y, rotation.z).rotated(Vector3(0, 0, 1), -Math_PI * 0.5));
 		} break;
 		case UIInterfaceOrientationLandscapeRight: {
-			DisplayServerIOS::get_singleton()->update_gravity(gravity.y, -gravity.x, gravity.z);
-			DisplayServerIOS::get_singleton()->update_accelerometer((acceleration.y + gravity.y), -(acceleration.x + gravity.x), acceleration.z + gravity.z);
-			DisplayServerIOS::get_singleton()->update_magnetometer(magnetic.y, -magnetic.x, magnetic.z);
-			DisplayServerIOS::get_singleton()->update_gyroscope(rotation.y, -rotation.x, rotation.z);
+			DisplayServerIOS::get_singleton()->update_gravity(Vector3(gravity.x, gravity.y, gravity.z).rotated(Vector3(0, 0, 1), Math_PI * 0.5));
+			DisplayServerIOS::get_singleton()->update_accelerometer(Vector3(acceleration.x + gravity.x, acceleration.y + gravity.y, acceleration.z + gravity.z).rotated(Vector3(0, 0, 1), Math_PI * 0.5));
+			DisplayServerIOS::get_singleton()->update_magnetometer(Vector3(magnetic.x, magnetic.y, magnetic.z).rotated(Vector3(0, 0, 1), Math_PI * 0.5));
+			DisplayServerIOS::get_singleton()->update_gyroscope(Vector3(rotation.x, rotation.y, rotation.z).rotated(Vector3(0, 0, 1), Math_PI * 0.5));
 		} break;
 		case UIInterfaceOrientationPortraitUpsideDown: {
-			DisplayServerIOS::get_singleton()->update_gravity(-gravity.x, gravity.y, gravity.z);
-			DisplayServerIOS::get_singleton()->update_accelerometer(-(acceleration.x + gravity.x), (acceleration.y + gravity.y), acceleration.z + gravity.z);
-			DisplayServerIOS::get_singleton()->update_magnetometer(-magnetic.x, magnetic.y, magnetic.z);
-			DisplayServerIOS::get_singleton()->update_gyroscope(-rotation.x, rotation.y, rotation.z);
+			DisplayServerIOS::get_singleton()->update_gravity(Vector3(gravity.x, gravity.y, gravity.z).rotated(Vector3(0, 0, 1), Math_PI));
+			DisplayServerIOS::get_singleton()->update_accelerometer(Vector3(acceleration.x + gravity.x, acceleration.y + gravity.y, acceleration.z + gravity.z).rotated(Vector3(0, 0, 1), Math_PI));
+			DisplayServerIOS::get_singleton()->update_magnetometer(Vector3(magnetic.x, magnetic.y, magnetic.z).rotated(Vector3(0, 0, 1), Math_PI));
+			DisplayServerIOS::get_singleton()->update_gyroscope(Vector3(rotation.x, rotation.y, rotation.z).rotated(Vector3(0, 0, 1), Math_PI));
 		} break;
 		default: { // assume portrait
-			DisplayServerIOS::get_singleton()->update_gravity(gravity.x, gravity.y, gravity.z);
-			DisplayServerIOS::get_singleton()->update_accelerometer(acceleration.x + gravity.x, acceleration.y + gravity.y, acceleration.z + gravity.z);
-			DisplayServerIOS::get_singleton()->update_magnetometer(magnetic.x, magnetic.y, magnetic.z);
-			DisplayServerIOS::get_singleton()->update_gyroscope(rotation.x, rotation.y, rotation.z);
+			DisplayServerIOS::get_singleton()->update_gravity(Vector3(gravity.x, gravity.y, gravity.z));
+			DisplayServerIOS::get_singleton()->update_accelerometer(Vector3(acceleration.x + gravity.x, acceleration.y + gravity.y, acceleration.z + gravity.z));
+			DisplayServerIOS::get_singleton()->update_magnetometer(Vector3(magnetic.x, magnetic.y, magnetic.z));
+			DisplayServerIOS::get_singleton()->update_gyroscope(Vector3(rotation.x, rotation.y, rotation.z));
 		} break;
 	}
 }

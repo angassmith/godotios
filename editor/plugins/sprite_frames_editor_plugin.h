@@ -31,7 +31,7 @@
 #ifndef SPRITE_FRAMES_EDITOR_PLUGIN_H
 #define SPRITE_FRAMES_EDITOR_PLUGIN_H
 
-#include "editor/editor_plugin.h"
+#include "editor/plugins/editor_plugin.h"
 #include "scene/2d/animated_sprite_2d.h"
 #include "scene/3d/sprite_3d.h"
 #include "scene/gui/button.h"
@@ -44,15 +44,20 @@
 #include "scene/gui/split_container.h"
 #include "scene/gui/texture_rect.h"
 #include "scene/gui/tree.h"
+#include "scene/resources/image_texture.h"
 
+class OptionButton;
 class EditorFileDialog;
 
-class EditorSpriteFramesFrame : public Resource {
-	GDCLASS(EditorSpriteFramesFrame, Resource);
+class ClipboardSpriteFrames : public Resource {
+	GDCLASS(ClipboardSpriteFrames, Resource);
 
 public:
-	Ref<Texture2D> texture;
-	float duration;
+	struct Frame {
+		Ref<Texture2D> texture;
+		float duration;
+	};
+	Vector<Frame> frames;
 };
 
 class SpriteFramesEditor : public HSplitContainer {
@@ -67,6 +72,22 @@ class SpriteFramesEditor : public HSplitContainer {
 		PARAM_SIZE, // Keep "Size" values.
 	};
 	int dominant_param = PARAM_FRAME_COUNT;
+
+	enum {
+		FRAME_ORDER_SELECTION, // Order frames were selected in.
+
+		// By Row.
+		FRAME_ORDER_LEFT_RIGHT_TOP_BOTTOM,
+		FRAME_ORDER_LEFT_RIGHT_BOTTOM_TOP,
+		FRAME_ORDER_RIGHT_LEFT_TOP_BOTTOM,
+		FRAME_ORDER_RIGHT_LEFT_BOTTOM_TOP,
+
+		// By Column.
+		FRAME_ORDER_TOP_BOTTOM_LEFT_RIGHT,
+		FRAME_ORDER_TOP_BOTTOM_RIGHT_LEFT,
+		FRAME_ORDER_BOTTOM_TOP_LEFT_RIGHT,
+		FRAME_ORDER_BOTTOM_TOP_RIGHT_LEFT,
+	};
 
 	bool read_only = false;
 
@@ -97,7 +118,7 @@ class SpriteFramesEditor : public HSplitContainer {
 	SpinBox *frame_duration = nullptr;
 	ItemList *frame_list = nullptr;
 	bool loading_scene;
-	int sel;
+	Vector<int> selection;
 
 	Button *add_anim = nullptr;
 	Button *delete_anim = nullptr;
@@ -110,6 +131,9 @@ class SpriteFramesEditor : public HSplitContainer {
 	LineEdit *anim_search_box = nullptr;
 	Tree *animations = nullptr;
 
+	Label *missing_anim_label = nullptr;
+	VBoxContainer *anim_frames_vb = nullptr;
+
 	EditorFileDialog *file = nullptr;
 
 	AcceptDialog *dialog = nullptr;
@@ -121,6 +145,7 @@ class SpriteFramesEditor : public HSplitContainer {
 	ConfirmationDialog *split_sheet_dialog = nullptr;
 	ScrollContainer *split_sheet_scroll = nullptr;
 	TextureRect *split_sheet_preview = nullptr;
+	VBoxContainer *split_sheet_settings_vb = nullptr;
 	SpinBox *split_sheet_h = nullptr;
 	SpinBox *split_sheet_v = nullptr;
 	SpinBox *split_sheet_size_x = nullptr;
@@ -132,10 +157,17 @@ class SpriteFramesEditor : public HSplitContainer {
 	Button *split_sheet_zoom_out = nullptr;
 	Button *split_sheet_zoom_reset = nullptr;
 	Button *split_sheet_zoom_in = nullptr;
+	Button *toggle_settings_button = nullptr;
+	OptionButton *split_sheet_order = nullptr;
 	EditorFileDialog *file_split_sheet = nullptr;
-	HashSet<int> frames_selected;
+	HashMap<int, int> frames_selected; // Key is frame index. Value is selection order.
 	HashSet<int> frames_toggled_by_mouse_hover;
+	Vector<Pair<int, int>> frames_ordered; // First is the index to be ordered by. Second is the actual frame index.
+	int selected_count = 0;
+	bool frames_need_sort = false;
 	int last_frame_selected = 0;
+
+	Size2i previous_texture_size;
 
 	float scale_ratio;
 	int thumbnail_default_size;
@@ -155,6 +187,9 @@ class SpriteFramesEditor : public HSplitContainer {
 	void _file_load_request(const Vector<String> &p_path, int p_at_pos = -1);
 	void _copy_pressed();
 	void _paste_pressed();
+	void _paste_frame_array(const Ref<ClipboardSpriteFrames> &p_clipboard_frames);
+	void _paste_texture(const Ref<Texture2D> &p_texture);
+
 	void _empty_pressed();
 	void _empty2_pressed();
 	void _delete_pressed();
@@ -162,6 +197,7 @@ class SpriteFramesEditor : public HSplitContainer {
 	void _down_pressed();
 	void _frame_duration_changed(double p_value);
 	void _update_library(bool p_skip_selector = false);
+	void _update_library_impl();
 
 	void _update_stop_icon();
 	void _play_pressed();
@@ -181,11 +217,14 @@ class SpriteFramesEditor : public HSplitContainer {
 	void _animation_speed_changed(double p_value);
 
 	void _frame_list_gui_input(const Ref<InputEvent> &p_event);
-	void _frame_list_item_selected(int p_index);
+	void _frame_list_item_selected(int p_index, bool p_selected);
 
 	void _zoom_in();
 	void _zoom_out();
 	void _zoom_reset();
+
+	bool animations_dirty = false;
+	bool pending_update = false;
 
 	bool updating;
 	bool updating_split_settings = false; // Skip SpinBox/Range callback when setting value by code.
@@ -206,10 +245,14 @@ class SpriteFramesEditor : public HSplitContainer {
 	void _sheet_zoom_in();
 	void _sheet_zoom_out();
 	void _sheet_zoom_reset();
-	void _sheet_select_clear_all_frames();
+	void _sheet_order_selected(int p_option);
+	void _sheet_select_all_frames();
+	void _sheet_clear_all_frames();
+	void _sheet_sort_frames();
+	void _toggle_show_settings();
+	void _update_show_settings();
 
 	void _edit();
-	void _regist_scene_undo(EditorUndoRedoManager *undo_redo);
 	void _fetch_sprite_node();
 	void _remove_sprite_node();
 
@@ -226,6 +269,8 @@ protected:
 
 public:
 	void edit(Ref<SpriteFrames> p_frames);
+	Ref<SpriteFrames> get_sprite_frames() const;
+
 	SpriteFramesEditor();
 };
 

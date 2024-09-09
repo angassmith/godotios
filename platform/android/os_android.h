@@ -32,6 +32,7 @@
 #define OS_ANDROID_H
 
 #include "audio_driver_opensl.h"
+
 #include "core/os/main_loop.h"
 #include "drivers/unix/os_unix.h"
 #include "servers/audio_server.h"
@@ -57,6 +58,7 @@ private:
 
 	mutable String data_dir_cache;
 	mutable String cache_dir_cache;
+	mutable String remote_fs_dir;
 
 	AudioDriverOpenSL audio_driver_android;
 
@@ -111,7 +113,7 @@ public:
 
 	virtual void alert(const String &p_alert, const String &p_title) override;
 
-	virtual Error open_dynamic_library(const String p_path, void *&p_library_handle, bool p_also_set_library_path = false, String *r_resolved_path = nullptr) override;
+	virtual Error open_dynamic_library(const String &p_path, void *&p_library_handle, GDExtensionData *p_data = nullptr) override;
 
 	virtual String get_name() const override;
 	virtual String get_distribution_name() const override;
@@ -132,7 +134,7 @@ public:
 	void set_native_window(ANativeWindow *p_native_window);
 	ANativeWindow *get_native_window() const;
 
-	virtual Error shell_open(String p_uri) override;
+	virtual Error shell_open(const String &p_uri) override;
 
 	virtual Vector<String> get_system_fonts() const override;
 	virtual String get_system_font_path(const String &p_font_name, int p_weight = 400, int p_stretch = 100, bool p_italic = false) const override;
@@ -151,7 +153,7 @@ public:
 
 	virtual Error move_to_trash(const String &p_path) override;
 
-	void vibrate_handheld(int p_duration_ms) override;
+	void vibrate_handheld(int p_duration_ms, float p_amplitude = -1.0) override;
 
 	virtual String get_config_path() const override;
 
@@ -159,10 +161,25 @@ public:
 	virtual Error create_process(const String &p_path, const List<String> &p_arguments, ProcessID *r_child_id = nullptr, bool p_open_console = false) override;
 	virtual Error create_instance(const List<String> &p_arguments, ProcessID *r_child_id = nullptr) override;
 	virtual Error kill(const ProcessID &p_pid) override;
+	virtual String get_system_ca_certificates() override;
+
+	virtual Error setup_remote_filesystem(const String &p_server_host, int p_port, const String &p_password, String &r_project_path) override;
+
+	virtual void benchmark_begin_measure(const String &p_context, const String &p_what) override;
+	virtual void benchmark_end_measure(const String &p_context, const String &p_what) override;
+	virtual void benchmark_dump() override;
+
+	virtual void load_platform_gdextensions() const override;
 
 	virtual bool _check_internal_feature_support(const String &p_feature) override;
 	OS_Android(GodotJavaWrapper *p_godot_java, GodotIOJavaWrapper *p_godot_io_java, bool p_use_apk_expansion);
 	~OS_Android();
+
+private:
+	// Location where we relocate external dynamic libraries to make them accessible.
+	String get_dynamic_libraries_path() const;
+	// Copy a dynamic library to the given location to make it accessible for loading.
+	bool copy_dynamic_library(const String &p_library_path, const String &p_target_dir, String *r_copy_path = nullptr);
 };
 
 #endif // OS_ANDROID_H

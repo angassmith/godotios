@@ -30,9 +30,9 @@
 
 #include "node_dock.h"
 
-#include "connections_dialog.h"
+#include "editor/connections_dialog.h"
 #include "editor/editor_node.h"
-#include "editor/editor_scale.h"
+#include "editor/themes/editor_scale.h"
 
 void NodeDock::show_groups() {
 	groups_button->set_pressed(true);
@@ -55,8 +55,8 @@ void NodeDock::_notification(int p_what) {
 	switch (p_what) {
 		case NOTIFICATION_ENTER_TREE:
 		case NOTIFICATION_THEME_CHANGED: {
-			connections_button->set_icon(get_theme_icon(SNAME("Signals"), SNAME("EditorIcons")));
-			groups_button->set_icon(get_theme_icon(SNAME("Groups"), SNAME("EditorIcons")));
+			connections_button->set_icon(get_editor_theme_icon(SNAME("Signals")));
+			groups_button->set_icon(get_editor_theme_icon(SNAME("Groups")));
 		} break;
 	}
 }
@@ -97,24 +97,24 @@ NodeDock::NodeDock() {
 	mode_hb->hide();
 
 	connections_button = memnew(Button);
-	connections_button->set_flat(true);
+	connections_button->set_theme_type_variation("FlatButton");
 	connections_button->set_text(TTR("Signals"));
 	connections_button->set_toggle_mode(true);
 	connections_button->set_pressed(true);
 	connections_button->set_h_size_flags(SIZE_EXPAND_FILL);
 	connections_button->set_clip_text(true);
 	mode_hb->add_child(connections_button);
-	connections_button->connect("pressed", callable_mp(this, &NodeDock::show_connections));
+	connections_button->connect(SceneStringName(pressed), callable_mp(this, &NodeDock::show_connections));
 
 	groups_button = memnew(Button);
-	groups_button->set_flat(true);
+	groups_button->set_theme_type_variation("FlatButton");
 	groups_button->set_text(TTR("Groups"));
 	groups_button->set_toggle_mode(true);
 	groups_button->set_pressed(false);
 	groups_button->set_h_size_flags(SIZE_EXPAND_FILL);
 	groups_button->set_clip_text(true);
 	mode_hb->add_child(groups_button);
-	groups_button->connect("pressed", callable_mp(this, &NodeDock::show_groups));
+	groups_button->connect(SceneStringName(pressed), callable_mp(this, &NodeDock::show_groups));
 
 	connections = memnew(ConnectionsDock);
 	add_child(connections);
